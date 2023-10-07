@@ -1,9 +1,5 @@
 # pluginNaty
- Plugin WordPress
-
- Claro! Vamos criar uma documentação básica para o seu plugin.
-
----
+Plugin WordPress
 
 ## Documentação: Plugin Naty App Oficial
 
