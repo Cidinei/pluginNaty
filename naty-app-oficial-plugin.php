@@ -13,22 +13,11 @@
 // CALLBACKS
 // ---------------
 
-
 // Função para exibir campos de entrada
 function naty_app_display_input_field($option_name, $default_value = '')
 {
   $value = get_option($option_name, $default_value);
   echo "<input type='text' name='{$option_name}' value='" . esc_attr($value) . "' />";
-}
-
-// Função para exibir textareas
-function naty_app_display_textarea($option_name, $default_value = '', $placeholder = '')
-{
-  $value = get_option($option_name, $default_value);
-  echo "<textarea id='{$option_name}' name='{$option_name}' rows='5' cols='40'>" . esc_textarea($value) . "</textarea>";
-  if ($placeholder) {
-    echo "<p>{$placeholder}</p>";
-  }
 }
 
 // Função de callback genérica para exibir mensagens em seções de configuração
@@ -40,7 +29,7 @@ function naty_app_generic_section_callback($message)
 // Função para exibir a página do formulário Elementor
 function naty_app_elementor_form_page_callback()
 {
-  
+
   // Verifica se o formulário foi enviado
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name']) && isset($_POST['number'])) {
 
@@ -74,7 +63,7 @@ function naty_app_elementor_form_page_callback()
         echo '<td>' . esc_html($call['datetime']) . '</td>';
         echo '<td>' . esc_html($call['name']) . '</td>';
         echo '<td>' . esc_html($call['number']) . '</td>';
-        echo '<td>' . (isset($call['whatsapp_id']) ? esc_html($call['whatsapp_id']) : 'N1/A') . '</td>';
+        echo '<td>' . (isset($call['whatsapp_id']) ? esc_html($call['whatsapp_id']) : '') . '</td>';
         echo '</tr>';
       }
       echo '</table>';
@@ -86,17 +75,11 @@ function naty_app_elementor_form_page_callback()
 <?php
 }
 
-// Funções de callback refatoradas
-function naty_app_elementor_section_callback()
-{
-  // Adicione conteúdo se necessário
-}
-
 function naty_app_elementor_global_body1_callback()
 {
   $value = get_option('naty_app_elementor_global_body1', '');
   echo '<p>Personalize o texto que será enviado pela Naty App.</p>';
-  echo "<textarea id='naty_app_elementor_global_body2' name='naty_app_elementor_global_body1' rows='5' cols='40'>" . esc_textarea($value) . "</textarea>";
+  echo "<textarea id='naty_app_elementor_global_body1' name='naty_app_elementor_global_body1' rows='5' cols='40'>" . esc_textarea($value) . "</textarea>";
 }
 function naty_app_elementor_global_body2_callback()
 {
@@ -118,7 +101,7 @@ function naty_app_elementor_inside_section_callback()
 
 function naty_app_elementor_inside_server_callback()
 {
-  naty_app_display_input_field('naty_app_elementor_inside_server', 'http://servicecm.dynns.com');
+  naty_app_display_input_field('naty_app_elementor_inside_server', 'http://XXXXXXX.XXX');
 }
 
 function naty_app_elementor_inside_port_callback()
@@ -141,40 +124,78 @@ function naty_app_elementor_authorization_key_callback()
   naty_app_display_input_field('naty_app_elementor_authorization_key');
 }
 
-
-// ... Todos os callbacks ...
+// ... 13 callbacks  ...
 
 // Função de Utilidade para Chamadas de API:
-function naty_app_elementor_api_call($method, $url, $body, $headers, $file = [])
-{
+function naty_app_elementor_api_call($method, $url, $body, $headers, $file = null) {
   $curl = curl_init();
-  curl_setopt_array($curl, [
-    CURLOPT_URL => $url,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_ENCODING => '',
-    CURLOPT_MAXREDIRS => 10,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-    CURLOPT_CUSTOMREQUEST => $method,
-    CURLOPT_POSTFIELDS => json_encode($body),
-    CURLOPT_HTTPHEADER => $headers,
-  ]);
-  $response = curl_exec($curl);
-  $err = curl_error($curl);
-  curl_close($curl);
 
-  // Dentro de naty_app_elementor_api_call, se você tiver um arquivo para enviar:
   if ($file) {
     $cfile = new \CURLFile($file['tmp_name'], $file['type'], $file['name']);
-    $body['file'] = $cfile;
-  } elseif (!$err) {
-    return $response;
-  } else {
-    // Aqui você pode decidir como lidar com erros.
-    // Por exemplo, retornar um array com a chave 'error'.
-    return ['error' => 'Erro cURL #: ' . $err];
-  }
+    $body['media'] = $cfile;
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
+} else {
+    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($body));
 }
+
+  curl_setopt_array($curl, [
+      CURLOPT_URL => $url,
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 95,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => $method,
+      CURLOPT_HTTPHEADER => $headers,
+  ]);
+
+  $response = curl_exec($curl);
+  $err = curl_error($curl);
+
+    curl_close($curl);
+
+    if ($err) {
+        error_log('Erro na API Naty App: ' . $err);  // Log ao invés de retornar diretamente
+        return ['error' => 'Houve um erro ao tentar fazer a chamada API.']; // Mensagem genérica para o usuário
+    } else {
+        return json_decode($response, true);
+    }
+}
+
+function update_and_store_api_file_data($authorization_key) {
+  // Define os parâmetros para a chamada da API.
+  $method = 'POST';
+  $url = 'https://api.beta.naty.app/api/v1/medias';
+  $file_path = '/path/to/your/file.jpg';  // Caminho absoluto para o seu arquivo.
+  $file = [
+      'tmp_name' => $file_path,
+      'type' => 'image/jpeg',
+      'name' => 'file.jpg'
+  ];
+  $headers = [
+    "Authorization: Bearer " . $authorization_key,
+      "Content-Type: multipart/form-data"
+  ];
+
+  // Faz a chamada da API.
+  $api_response = naty_app_elementor_api_call($method, $url, [], $headers, $file);
+
+  // Verifica se a chamada da API foi bem sucedida.
+  if (isset($api_response['error'])) {
+      // Manipula o erro conforme necessário...
+      error_log('API call failed: ' . $api_response['error']);
+      return;
+  }
+
+  // Armazena a resposta da API no banco de dados do WordPress.
+  update_option('last_api_response', $api_response);
+}
+
+
+
+
+
+
 // ---------------
 // FUNÇÕES AUXILIARES
 // ---------------
@@ -255,9 +276,52 @@ function naty_app_elementor_whatsapp_id_callback()
   echo '</select>';
 }
 
-function naty_app_elementor_process_form($whatsapp_id)
-{
-  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name']) && isset($_POST['number']) && isset($_POST['body'])) {
+function naty_app_elementor_update_file_callback() {
+  // Verifique se o formulário foi submetido e o arquivo foi carregado.
+  if (isset($_POST['update_and_store_api_file_data']) && isset($_FILES['naty_app_elementor_update_file'])) {
+      // Defina os parâmetros para a chamada da API.
+      $method = 'POST';
+      $url = 'https://api.beta.naty.app/api/v1/medias';
+      $authorization_key = get_option('naty_app_elementor_authorization_key');
+      $headers = [
+          "Authorization: Bearer " . $authorization_key,
+          "Content-Type: multipart/form-data"
+      ];
+      $file = $_FILES['naty_app_elementor_update_file'];
+
+      // Faça a chamada da API.
+      $api_response = naty_app_elementor_api_call($method, $url, [], $headers, $file);
+
+      // Verifique se a chamada da API foi bem sucedida.
+      if (isset($api_response['error'])) {
+          // Manipula o erro conforme necessário...
+          error_log('API call failed: ' . $api_response['error']);
+      } else {
+          // Armazena a resposta da API no banco de dados do WordPress.
+          update_option('last_media_response', $api_response);
+      }
+  }
+
+  // Obtenha a opção last_media_response.
+  $last_media_response = get_option('last_media_response', []);
+
+  // Imprima o campo para fazer o upload de um arquivo.
+  echo '<input type="file" name="naty_app_elementor_update_file" id="naty_app_elementor_update_file" />';
+  echo "<input type='submit' name='update_and_store_api_file_data' value='Upload and Update' />";
+
+  // Imprima o seletor com os códigos da opção last_media_response.
+  echo '<select name="naty_app_elementor_code_selector" id="naty_app_elementor_code_selector">';
+
+  // Itere sobre os códigos salvos e imprima-os como opções.
+  foreach ($last_media_response as $code) {
+      echo '<option value="' . esc_attr($code) . '">' . esc_html($code) . '</option>';
+  }
+
+  echo '</select>';
+}
+
+function naty_app_elementor_process_form() {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name']) && isset($_POST['number']) && isset($_FILES['file']) && isset($_POST['body'])) {
 
 
     // Obtém os valores dos campos do formulário
@@ -279,6 +343,7 @@ function naty_app_elementor_process_form($whatsapp_id)
     $validation = array("(", ")", " ", "-", "+", "*");
     $number_cleaned = str_replace($validation, "", $number);
     $number_final = $ddi . $number_cleaned;
+    $file = $_FILES['file'];
 
     // Configuração da requisição
     $url = 'https://api.beta.naty.app/api/v1/messages/instantly/';
@@ -317,6 +382,25 @@ function naty_app_elementor_process_form($whatsapp_id)
         'whatsapp_id' => $whatsapp_id,
       ]);
     }
+    $url = "https://api.beta.naty.app/api/v1/medias";
+        $headers = [
+            "Content-Type: multipart/form-data"
+        ];
+
+        $authorization_key = get_option('naty_app_elementor_authorization_key');
+        if (!empty($authorization_key)) {
+          $headers[] = 'Authorization: Bearer ' . $authorization_key;
+        }
+        $response = naty_app_elementor_api_call('POST', $url, [], $headers, $file);
+
+        if (isset($response['error'])) {
+            echo "<div class='notice notice-error'><p>" . esc_html($response['error']) . "</p></div>";
+        } else {
+            // Guardar a resposta da API para uso posterior
+            update_option('last_media_response', $response);
+
+            echo "<div class='notice notice-success'><p>Arquivo enviado com sucesso!</p></div>";
+        }
   }
 }
 
@@ -345,7 +429,7 @@ function naty_app_elementor_process_form_inside()
         'whatsapp_id' => $whatsapp_id,
       ]);
 
-      $url = get_option('naty_app_elementor_server', 'http://servicecm.dynns.com') . ':' . get_option('naty_app_elementor_port', '9596') . '/api/v1/secretarianaty/boleto/segundavia';
+      $url = get_option('naty_app_elementor_server', 'http://xxxxxx.xxxx') . ':' . get_option('naty_app_elementor_port', '9596') . '/api/v1/secretarianaty/boleto/segundavia';
       $body = [
         'telefone' => $number,
         'documento' => $document,
@@ -377,6 +461,7 @@ function naty_app_elementor_post_request($record, $ajax_handler)
   $fields = $record->get('fields');
   $name = $fields['name']['value'];
   $number = $fields['number']['value'];
+  $body = $fields['body']['value'];
 
   $ddi = "55";
   $validation = array("(", ")", " ", "-", "+", "*");
@@ -414,7 +499,6 @@ function naty_app_elementor_post_request($record, $ajax_handler)
   }
 }
 
-
 // Adiciona o menu do plugin ao painel lateral do WordPress
 function naty_app_elementor_add_menu()
 {
@@ -425,17 +509,28 @@ function naty_app_elementor_add_menu()
     'manage_options',
     'naty-app-elementor',
     'naty_app_elementor_page',
-    $logo_url
+    $logo_url,
+    88
   );
 }
-
 
 // Função para exibir a página do plugin
 function naty_app_elementor_page()
 {
   // Verifica se o formulário foi enviado
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name']) && isset($_POST['number'])) {
-
+   // Verifica qual campo foi enviado (body1 ou body2)
+  if (isset($_POST['body']) && $_POST['body'] === 'body1') {
+    // O formulário enviou o campo body1
+    $global_body = get_option('naty_app_elementor_global_body1');
+  } elseif (isset($_POST['body']) && $_POST['body'] === 'body2') {
+    // O formulário enviou o campo body2
+    $global_body = get_option('naty_app_elementor_global_body2');
+  } else {
+    // Lida com a situação em que nenhum dos campos foi enviado
+    echo "Nenhum campo body foi enviado no formulário.";
+  }
+}
     // Exibe o conteúdo da página do plugin
     ?>
 <div class="wrap">
@@ -452,7 +547,6 @@ function naty_app_elementor_page()
     </form>
 </div>
 <?php
-  }
 }
 
 // Função para processar e salvar as opções
@@ -514,6 +608,111 @@ function naty_app_elementor_inside_page()
 <?php
 }
 
+function naty_app_elementor_section_callback() {
+  echo '<p>Configurações para a integração com a Naty App.</p>';
+}
+
+function naty_app_elementor_test_number_callback() {
+  // Logic for handling form submission
+  if (isset($_POST['naty_app_elementor_test_number'])) {
+      handle_form_submission();
+  }
+
+  // Display form
+  display_form();
+}
+
+function save_to_database($selected_body, $test_number) {
+  global $wpdb;
+  $table_name = $wpdb->prefix . "nome_da_tabela"; // Substitua "nome_da_tabela" pelo nome da sua tabela no banco de dados
+
+  $data = array(
+      'selected_body' => $selected_body,
+      'test_number' => $test_number
+  );
+
+  $wpdb->insert($table_name, $data);
+}
+
+
+
+function handle_form_submission() {
+  $test_number = get_option('naty_app_elementor_test_number', '');
+  $selected_body = $_POST['selected_global_body'] ?? 'naty_app_elementor_global_body1';
+
+  // Validate input
+  if (empty($test_number)) {
+      display_error_message('O número de teste está vazio!');
+      return;
+  }
+  $authorization_key = get_option('naty_app_elementor_authorization_key');
+  if (empty($authorization_key)) {
+      display_error_message('A chave de autorização está vazia!');
+      return;
+  }
+
+  // Save to database
+  save_to_database($selected_body, $test_number);
+
+  // Additional logic to prepare data for API call
+  $whatsapp_id = get_option('naty_app_elementor_whatsapp_id');
+  $global_body = get_option($selected_body);
+  $ddi = "55";
+  $validation = array("(", ")", " ", "-", "+", "*");
+  $number_cleaned = str_replace($validation, "", $test_number);
+  $number_final = $ddi . $number_cleaned;
+  $url = 'https://api.beta.naty.app/api/v1/messages/instantly/';
+  $body = [
+      'whatsappId' => $whatsapp_id,
+      'globalBody' => $global_body,
+      'messages' => [
+          [
+              'number' => $number_final,
+          ]
+      ]
+  ];
+  $headers = ['Content-Type: application/json'];
+  $headers[] = 'Authorization: Bearer ' . $authorization_key;
+
+  // Send API request and handle response
+  $response = naty_app_elementor_api_call('POST', $url, $body, $headers);
+  handle_api_response($response);
+}
+
+
+
+function display_form() {
+  echo "<form method='post'>";
+  echo "<select name='selected_global_body'>";
+  echo "<option value='naty_app_elementor_global_body1'>Formulário 1</option>";
+  echo "<option value='naty_app_elementor_global_body2'>Formulário 2</option>";
+  echo "</select>";
+  echo "<input type='text' name='naty_app_elementor_test_number' value='' />";
+  echo "<input type='submit' name='test_disparo' value='Teste' />";
+  echo "</form>";
+}
+
+
+
+function display_error_message($message) {
+  error_log($message);
+  echo "<div class='notice notice-error'><p>" . esc_html($message) . "</p></div>";
+}
+
+
+function handle_api_response($response) {
+  if (isset($response['error'])) {
+      display_error_message($response['error']);
+  } else {
+      echo "<div class='notice notice-success'><p>Disparo de teste enviado com sucesso!</p></div>";
+      // Additional logic for successful API response...
+  }
+}
+
+// ---------
+// Shortcode
+//----------
+
 function naty_app_elementor_form_shortcode()
 {
   ob_start();
@@ -568,7 +767,9 @@ function naty_app_elementor_admin_init()
   register_setting('naty_app_elementor_options', 'naty_app_elementor_whatsapp_id');
   register_setting('naty_app_elementor_options', 'naty_app_elementor_global_body1');
   register_setting('naty_app_elementor_options', 'naty_app_elementor_global_body2');
+
   register_setting('naty_app_elementor_options', 'naty_app_elementor_test_number');
+  register_setting('naty_app_elementor_options', 'naty_app_elementor_update_file');
 
   // Registra a opção de configuração para o atraso (delay)
   register_setting('naty_app_elementor_options', 'naty_app_elementor_delay');
@@ -629,6 +830,15 @@ function naty_app_elementor_admin_init()
     'naty_app_elementor',
     'naty_app_elementor_section'
   );
+
+    // Adiciona o arquivo.
+    add_settings_field(
+      'naty_app_elementor_update_file',
+      'Media para Disparo',
+      'naty_app_elementor_update_file_callback',
+      'naty_app_elementor',
+      'naty_app_elementor_section'
+    );
   // Adiciona o campo de configuração para o atraso (delay)
   add_settings_field(
     'naty_app_elementor_delay',
@@ -663,7 +873,7 @@ function naty_app_elementor_admin_init()
   );
 }
 
-// ... Todas as funções auxiliares ...
+// ... 18 as funções auxiliares ...
 
 // ---------------
 // HOOKS DO WORDPRESS
@@ -691,20 +901,24 @@ add_action('admin_menu', 'naty_app_elementor_add_submenu_form');
 
 add_action('admin_menu', 'naty_app_elementor_add_submenu');
 
+// Adiciona um gancho para executar a função quando o WordPress inicializa (ou escolha outro gancho conforme necessário).
+add_action('wp_loaded', 'update_and_store_api_file_data');
+
+add_action('admin_init', 'naty_app_elementor_admin_init');
+
 // Adicionando esta página como um submenu administrativo no WordPress
 add_action('admin_menu', function () {
-  add_submenu_page('options-general.php', 'Chamadas da API', 'Chamadas da API', 'manage_options', 'meu_slug_do_submenu', 'naty_app_elementor_form_page_callback');
-
+  add_submenu_page('options-general.php', 'Chamadas da API', 'manage_options', 'meu_slug_do_submenu', 'naty_app_elementor_form_page_callback');
 });
 
 
+
+//----------------
+//  Shortcode
+//----------------
 
 // Registra o shortcode para exibir o formulário
 add_shortcode('naty_app_elementor_form', 'naty_app_elementor_form_shortcode');
 
 // Shortcode para exibir o formulário com telefone e documento e link de servidor personalizado
 add_shortcode('naty_app_elementor_form_with_phone_document', 'naty_app_elementor_form_with_phone_document_shortcode');
-
-//----------------
-//  Dev
-//----------------
